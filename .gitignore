@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+env/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# DB Files
+*.db
+*.sqlite3
+
+# Logs
+*.log
+
+# Docker
+*.pid
+*.tar
+
+# __pycache__ in whole project
+**/__pycache__/
