@@ -21,3 +21,5 @@ opentelemetry-instrumentation-requests==0.39b0
 opentelemetry-semantic-conventions==0.39b0
 
 requests==2.31.0
+langfuse
+arize-phoenix

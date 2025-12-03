@@ -1,34 +1,78 @@
+# app/llm_client.py
+
 import time
 import uuid
-from typing import Any, Dict
+from opentelemetry import trace
+
 from app.monitoring.collector import record_request
+from app.db.models import insert_record_sync
+
+tracer = trace.get_tracer(__name__)
+
 
 class FakeLLM:
-    """A tiny fake LLM for demonstration. Replace with real SDK calls."""
+    """
+    A simple mock LLM client used for testing observability.
+    It simulates processing, generates a response,
+    records metrics, and pushes tracing spans.
+    """
 
     def __init__(self, model_name: str = "gpt-demo"):
         self.model_name = model_name
 
-    def generate(self, prompt: str, user_id: str = "anonymous") -> Dict[str, Any]:
+    async def generate(self, prompt: str, user_id: str = "unknown"):
         request_id = str(uuid.uuid4())
-        start = time.perf_counter()
+        start_time = time.perf_counter()
 
-        # simulate processing time
-        time.sleep(0.05 + (len(prompt) % 10) * 0.01)
-        duration = time.perf_counter() - start
+        # ---- OpenTelemetry Tracing ----
+        with tracer.start_as_current_span("llm_generate") as span:
+            span.set_attribute("llm.model", self.model_name)
+            span.set_attribute("llm.prompt.length", len(prompt))
+            span.set_attribute("llm.user_id", user_id)
+            span.set_attribute("llm.request_id", request_id)
 
-        response = {
+            # simulate processing
+            time.sleep(0.05)
+
+            response_text = f"Echo: {prompt}"
+            token_count = len(prompt.split())
+
+            duration = time.perf_counter() - start_time
+
+            # ---- Prometheus Metrics ----
+            record_request(
+                model=self.model_name,
+                prompt=prompt,
+                tokens=token_count,
+                duration=duration,
+                status="success",
+                user_id=user_id,
+            )
+
+            # ---- SQLite Logging ----
+            insert_record_sync(
+                request_id=request_id,
+                model=self.model_name,
+                prompt=prompt,
+                response=response_text,
+                tokens=token_count,
+                duration=duration,
+                status="success",
+                user_id=user_id,
+            )
+
+            # add tracing attributes
+            span.set_attribute("llm.output.tokens", token_count)
+            span.set_attribute("llm.latency_ms", duration * 1000)
+            span.set_attribute("llm.response", response_text)
+
+        return {
             "request_id": request_id,
             "model": self.model_name,
             "prompt": prompt,
-            "response": f"Echo: {prompt[:120]}",
-            "tokens": len(prompt.split()),
+            "response": response_text,
+            "tokens": token_count,
             "duration": duration,
             "status": "success",
             "user_id": user_id,
         }
-
-        # record monitoring information
-        record_request(response)
-
-        return response
